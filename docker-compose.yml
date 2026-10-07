@@ -1,0 +1,40 @@
+services:
+  redis:
+    image: redis:8.0
+    # Context only: no persistence. Chunks and chat history are rebuilt from SQLite.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATA_DIR: /data
+    ports:
+      - "8501:8501"
+    volumes:
+      - data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: ["python", "app/worker.py"]
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATA_DIR: /data
+    volumes:
+      - data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  data:   # SQLite database, uploaded files, per-document table databases
